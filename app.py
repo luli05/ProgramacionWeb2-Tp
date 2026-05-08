@@ -1,34 +1,66 @@
-from fastapi import FastAPI
-from models import products
-from cart import cart, add_to_cart, remove_from_cart, get_total
 
-app = FastAPI()
-
-@app.get("/products")
-def list_products():
-    return products
+from flask import Flask
+from flask_restx import Api, Resource, fields
+from products import products
+from cart import cart
 
 
-@app.post("/cart/{product_id}")
-def add_product(product_id: int):
-    product = next((p for p in products if p["id"] == product_id), None)
-    if product:
-        add_to_cart(product)
-        return {"message": "Producto agregado"}
-    return {"error": "Producto no encontrado"}
+app = Flask(__name__)
 
 
-@app.delete("/cart/{product_id}")
-def remove_product(product_id: int):
-    remove_from_cart(product_id)
-    return {"message": "Producto eliminado"}
+api = Api(
+    app,
+    title="Carrito Blanqueria API",
+    version="1.0",
+    description="API para gestionar productos y carrito de compras"
+)
+
+# listar productos
+@api.route("/products")
+class Products(Resource):
+    def get(self):
+        return products
 
 
-@app.get("/cart")
-def view_cart():
-    return cart
+# agregar al carrito
+@api.route("/cart")
+class Cart(Resource):
+
+    def get(self):
+        return cart
+
+    def post(self):
+        from flask import request
+
+        data = request.json
+        product_id = data["product_id"]
+
+        product = next((p for p in products if p["id"] == product_id), None)
+
+        if product:
+            cart.append(product)
+            return {"message": "Producto agregado", "cart": cart}
+
+        return {"error": "Producto no encontrado"}, 404
 
 
-@app.get("/cart/total")
-def total():
-    return {"total": get_total()}
+# eliminar producto
+@api.route("/cart/<int:product_id>")
+class RemoveProduct(Resource):
+
+    def delete(self, product_id):
+        global cart
+        cart[:] = [p for p in cart if p["id"] != product_id]
+
+        return {"message": "Producto eliminado", "cart": cart}
+
+
+# calcular total
+@api.route("/cart/total")
+class CartTotal(Resource):
+
+    def get(self):
+        total = sum(p["price"] for p in cart)
+        return {"total": total}
+
+
